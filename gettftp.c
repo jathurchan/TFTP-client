@@ -20,10 +20,10 @@
 
 #include <arpa/tftp.h>  // (struct tftphdr defined in it)
 
-char buffer[1024];
+char buffer[512];
 
 
-// Functions (def)
+// ==== Functions (definition) ====
 
 void checkEnoughArgs(int argc, char **argv, char **host, char **file);
 
@@ -32,8 +32,11 @@ void getServAddr(char *host, struct addrinfo *hints, struct addrinfo *result);
 
 int createSocket(struct addrinfo *result);
 
+void sendRRQ(int sfd, struct addrinfo *result, char *fileName, char *mode);
+void fillPacket(char **packet, char *fileName, char *mode);
 
-// MAIN
+
+// ==== MAIN ====
 
 int main (int argc, char **argv) {
 
@@ -49,13 +52,16 @@ int main (int argc, char **argv) {
     getServAddr(host, &hints, result);
 
     // ---- Create a socket
-    int sfd = createSocket(result);
-    // printf("%d", sfd);
+    int sockfd = createSocket(result);
+    // printf("%d", sockfd);
+
+    // ---- Form and send a Read Request (RRQ)
+    sendRRQ(sockfd, result, file, "octet");
     
 }
 
 
-// Functions
+// ==== Functions (implementation) ====
 
 void checkEnoughArgs(int argc, char **argv, char **host, char **file) {
 
@@ -101,5 +107,37 @@ int createSocket(struct addrinfo *result) {
     freeaddrinfo(result);
 
     return sfd;
+
+}
+
+void sendRRQ(int sfd, struct addrinfo *result, char *fileName, char *mode) {
+    char *packet;
+    int packetSize = 2 + strlen(fileName)+1+strlen(mode)+1;
+    packet = (char *) malloc(packetSize);
+
+    fillPacket(&packet, fileName, mode);
+
+    sendto(sfd, packet, packetSize, 0, (struct sockaddr *) result->ai_addr, result->ai_addrlen);
+
+    packet = (char *) realloc(packet, packetSize);
+
+}
+
+void fillPacket(char **packet, char *fileName, char *mode) {
+
+    (*packet)[0] = 0;
+    (*packet)[1] = 1;
+
+    char *cp = &((*packet)[2]);
+
+    strcpy(cp, fileName);
+    cp += strlen(fileName);
+
+    *cp++ = '\0';
+
+    strcpy(cp, mode);
+    cp += strlen(mode);
+
+    *cp++ = '\0';
 
 }
