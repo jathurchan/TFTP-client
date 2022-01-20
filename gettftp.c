@@ -16,8 +16,11 @@
 
 #include <netdb.h>
 #include <arpa/inet.h>  // (uint16_t htons(uint16_t hostshort);)
+#include <netinet/in.h>
 
 #include <arpa/tftp.h>  // (struct tftphdr defined in it)
+
+char buffer[1024];
 
 
 // Functions (def)
@@ -26,6 +29,8 @@ void checkEnoughArgs(int argc, char **argv, char **host, char **file);
 
 void initHints(struct addrinfo *hints);
 void getServAddr(char *host, struct addrinfo *hints, struct addrinfo *result);
+
+int createSocket(struct addrinfo *result);
 
 
 // MAIN
@@ -42,6 +47,10 @@ int main (int argc, char **argv) {
     initHints(&hints);
     // printf("%d %d %d", hints.ai_family, hints.ai_socktype, hints.ai_protocol);
     getServAddr(host, &hints, result);
+
+    // ---- Create a socket
+    int sfd = createSocket(result);
+    // printf("%d", sfd);
     
 }
 
@@ -79,5 +88,18 @@ void getServAddr(char *host, struct addrinfo *hints, struct addrinfo *result) {
         exit(EXIT_FAILURE);
     }
 
+}
+
+int createSocket(struct addrinfo *result) {
+    int sfd = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+
+    if (sfd < 0) {
+		perror("Socket Failure");
+		exit(EXIT_FAILURE);
+	}
+
+    freeaddrinfo(result);
+
+    return sfd;
 
 }
