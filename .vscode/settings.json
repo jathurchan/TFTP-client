@@ -1,5 +1,10 @@
 {
     "files.associations": {
-        "errno.h": "c"
+        "errno.h": "c",
+        "types.h": "c",
+        "unistd.h": "c",
+        "netdb.h": "c",
+        "inet.h": "c",
+        "tftp.h": "c"
     }
 }
