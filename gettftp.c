@@ -37,9 +37,10 @@ int createSocket(struct addrinfo *result);
 void sendRRQ(int sfd, struct addrinfo *result, char *fileName, char *mode);
 void fillPacket(char **packet, char *fileName, char *mode);
 
-void receiveSinglePacket(char **buffer, int *countBlock, int sfd, struct sockaddr *servAddr, socklen_t *servAddrLen);
+void receiveSinglePacket(char **buffer, int sfd, struct sockaddr *servAddr, socklen_t servAddrLen);
 int openOutFile(char *fileName);
 char* fillACK(char c3, char c4);
+void receiveMultiplePackets(char **buffer, int *countBlock, int sfd, struct sockaddr *servAddr, socklen_t servAddrLen);
 
 
 // ==== MAIN ====
@@ -72,7 +73,10 @@ int main (int argc, char **argv) {
     int countBlock = 0;
     
         // -- Receive a file with a single data packet
-        receiveSinglePacket(&buffer, countBlock , sockfd, &servAddr, &servAddrLen);
+        receiveSinglePacket(&buffer, sockfd, &servAddr, servAddrLen);
+
+        // -- Receive a file with multiple data packets
+        receiveMultiplePackets(&buffer, &countBlock, sockfd, &servAddr, servAddrLen);
 
 }
 
@@ -158,9 +162,9 @@ void fillPacket(char **packet, char *fileName, char *mode) {
 
 }
 
-void receiveSinglePacket(char **buffer, int *countBlock, int sfd, struct sockaddr *servAddr, socklen_t *servAddrLen) {
+void receiveSinglePacket(char **buffer,  int sfd, struct sockaddr *servAddr, socklen_t servAddrLen) {
     
-    ssize_t nOfBytesR = recvfrom(sfd, *buffer, BUFFER_SIZE, 0, servAddr, servAddrLen);
+    ssize_t nOfBytesR = recvfrom(sfd, *buffer, BUFFER_SIZE, 0, servAddr, &servAddrLen);
     if (nOfBytesR == -1) {
         perror("Reading Error");
         exit(EXIT_FAILURE);
@@ -189,4 +193,38 @@ char* fillACK(char c3, char c4) {
     ack[2] = c3;
     ack[3] = c4;
     return ack;
+}
+
+void receiveMultiplePackets(char **buffer, int *countBlock, int sfd, struct sockaddr *servAddr, socklen_t servAddrLen) {
+
+    ssize_t nOfBytesR = recvfrom(sfd, *buffer, BUFFER_SIZE, 0, servAddr, &servAddrLen);
+
+    if (nOfBytesR == -1) {
+        perror("Reading Error");
+        exit(EXIT_FAILURE);
+    }
+
+    char *outFileName = "output.txt";
+    int f = openOutFile(outFileName);
+
+    while (*countBlock < (*buffer)[3]) {    // received a new block?
+
+        write(f, &((*buffer)[4]), nOfBytesR-4);
+        sendto(sfd, fillACK((*buffer)[2], (*buffer)[3]), 4, 0, servAddr, servAddrLen);
+        
+        *buffer = (char *) realloc(*buffer, BUFFER_SIZE);
+        nOfBytesR = recvfrom(sfd, *buffer, BUFFER_SIZE, 0, servAddr, &servAddrLen);
+
+        if(nOfBytesR >= 512+4) { // if not updated -> end of while
+            *countBlock = *countBlock + 1;
+        }
+
+    }
+
+    // Send the last ACK
+    sendto(sfd, fillACK((*buffer)[2], (*buffer)[3]), 4, 0, servAddr, servAddrLen);
+
+    close(f);
+    free(buffer);
+
 }
