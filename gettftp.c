@@ -8,6 +8,8 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 
+#include <fcntl.h>
+
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>  // (void *malloc(size_t size))
@@ -20,7 +22,7 @@
 
 #include <arpa/tftp.h>  // (struct tftphdr defined in it)
 
-char buffer[512];
+#define BUFFER_SIZE 512 
 
 
 // ==== Functions (definition) ====
@@ -34,6 +36,10 @@ int createSocket(struct addrinfo *result);
 
 void sendRRQ(int sfd, struct addrinfo *result, char *fileName, char *mode);
 void fillPacket(char **packet, char *fileName, char *mode);
+
+void receiveSinglePacket(char **buffer, int *countBlock, int sfd, struct sockaddr *servAddr, socklen_t *servAddrLen);
+int openOutFile(char *fileName);
+char* fillACK(char c3, char c4);
 
 
 // ==== MAIN ====
@@ -57,7 +63,17 @@ int main (int argc, char **argv) {
 
     // ---- Form and send a Read Request (RRQ)
     sendRRQ(sockfd, result, file, "octet");
+
+    // ---- Receive data packets
+    struct sockaddr servAddr;
+    socklen_t servAddrLen = sizeof(servAddr);
+    char *buffer;
+    buffer = (char *) malloc(BUFFER_SIZE);
+    int countBlock = 0;
     
+        // -- Receive a file with a single data packet
+        receiveSinglePacket(&buffer, countBlock , sockfd, &servAddr, &servAddrLen);
+
 }
 
 
@@ -140,4 +156,37 @@ void fillPacket(char **packet, char *fileName, char *mode) {
 
     *cp++ = '\0';
 
+}
+
+void receiveSinglePacket(char **buffer, int *countBlock, int sfd, struct sockaddr *servAddr, socklen_t *servAddrLen) {
+    
+    ssize_t nOfBytesR = recvfrom(sfd, *buffer, BUFFER_SIZE, 0, servAddr, servAddrLen);
+    if (nOfBytesR == -1) {
+        perror("Reading Error");
+        exit(EXIT_FAILURE);
+    }
+
+    sendto(sfd, fillACK(0, 0), 4, 0, servAddr, servAddrLen);
+
+}
+
+int openOutFile(char *fileName) {
+    int f = open(fileName, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP);
+
+    if (f == -1) {
+        perror("Opening Output File Error");
+        exit(EXIT_FAILURE);
+    }
+    
+    return f;
+}
+
+char* fillACK(char c3, char c4) {
+    char *ack;
+    ack = (char *) malloc(4);
+    ack[0] = 0;
+    ack[1] = 4;
+    ack[2] = c3;
+    ack[3] = c4;
+    return ack;
 }
